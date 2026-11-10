@@ -3,7 +3,7 @@ FROM php:8.3-apache
 WORKDIR /var/www/html
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git unzip libicu-dev libonig-dev libzip-dev nodejs npm \
+    && apt-get install -y --no-install-recommends git unzip libicu-dev libonig-dev libzip-dev libpq-dev nodejs npm \
     && docker-php-ext-install bcmath intl mbstring pdo_mysql pdo_pgsql zip \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
