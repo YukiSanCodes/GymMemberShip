@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Member;
 use App\Models\MembershipLevel;
 use App\Models\MembershipTransaction;
+use App\Notifications\MembershipApplicationSubmitted;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -28,7 +30,8 @@ class TransactionController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['member_id' => 'required|exists:members,id', 'membership_level_id' => 'required|exists:membership_levels,id', 'type' => 'required|in:application,renewal', 'notes' => 'nullable|string|max:1000']);
+        $data = $request->validate(['member_id' => 'required|exists:members,id', 'membership_level_id' => 'required|exists:membership_levels,id', 'type' => 'required|in:application,renewal', 'notes' => 'nullable|string|max:1000', 'address' => 'nullable|string|max:255', 'latitude' => 'nullable|required_with:longitude|numeric|between:-90,90', 'longitude' => 'nullable|required_with:latitude|numeric|between:-180,180', 'location_consent' => 'accepted|required_with:latitude,longitude']);
+        unset($data['location_consent']);
         $member = Member::findOrFail($data['member_id']);
         if ($data['type'] === 'application' && $member->transactions()->where('type', 'application')->whereIn('status', ['Pending', 'Paid', 'Approved'])->exists()) {
             return back()->withErrors(['type' => 'This member already has an application. Use renewal for an existing member.'])->withInput();
@@ -37,9 +40,17 @@ class TransactionController extends Controller
         } $level = MembershipLevel::findOrFail($data['membership_level_id']);
         $startsAt = $member->expires_at?->isFuture() ? $member->expires_at->copy()->addDay() : today();
         $reference = 'GYM-'.now()->format('ymd').'-'.Str::upper(Str::random(7));
-        $transaction = MembershipTransaction::create([...$data, 'reference_number' => $reference, 'processed_by' => $request->user()->id, 'status' => (float) $level->fee === 0.0 ? 'Paid' : 'Pending', 'amount' => $level->fee, 'starts_at' => $startsAt, 'expires_at' => Carbon::parse($startsAt)->addMonths($level->validity_months)]);
+        $transaction = DB::transaction(function () use ($data, $reference, $request, $level, $startsAt) {
+            $transaction = MembershipTransaction::create([...$data, 'reference_number' => $reference, 'processed_by' => $request->user()->id, 'status' => (float) $level->fee === 0.0 ? 'Paid' : 'Pending', 'amount' => $level->fee, 'starts_at' => $startsAt, 'expires_at' => Carbon::parse($startsAt)->addMonths($level->validity_months)]);
 
-        return redirect()->route('transactions.show', $transaction)->with('success', 'Membership transaction created. Record payment to continue.');
+            if ($transaction->type === 'application') {
+                Notification::route('mail', $transaction->member->email)->notify(new MembershipApplicationSubmitted($transaction));
+            }
+
+            return $transaction;
+        });
+
+        return redirect()->route('transactions.show', $transaction)->with('success', 'Membership transaction created. Application emails are queued for delivery. Record payment to continue.');
     }
 
     public function show(MembershipTransaction $transaction): View
@@ -65,6 +76,6 @@ class TransactionController extends Controller
             return back()->with('error', 'This transaction can no longer be cancelled.');
         } $transaction->update(['status' => 'Cancelled']);
 
-        return back()->with('success','Transaction cancelled.');
+        return back()->with('success', 'Transaction cancelled.');
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Controllers\LevelController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\WeatherController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -17,6 +18,7 @@ Route::middleware('guest')->group(function (): void {
 });
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 Route::middleware('auth')->group(function (): void {
+    Route::get('/weather', [WeatherController::class, 'show'])->middleware('throttle:30,1')->name('weather.show');
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::resource('members', MemberController::class);
     Route::patch('/members/{member}/deactivate', [MemberController::class, 'deactivate'])->name('members.deactivate');

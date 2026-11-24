@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MembershipTransaction extends Model
 {
-    protected $fillable = ['reference_number', 'member_id', 'membership_level_id', 'processed_by', 'type', 'status', 'amount', 'starts_at', 'expires_at', 'notes'];
+    protected $fillable = ['reference_number', 'member_id', 'membership_level_id', 'processed_by', 'type', 'status', 'amount', 'starts_at', 'expires_at', 'notes', 'address', 'latitude', 'longitude'];
 
     protected function casts(): array
     {

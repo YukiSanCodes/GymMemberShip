@@ -3,7 +3,7 @@ FROM php:8.4-apache
 WORKDIR /var/www/html
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git unzip libicu-dev libonig-dev libzip-dev libpq-dev nodejs npm \
+    && apt-get install -y --no-install-recommends git unzip libicu-dev libonig-dev libzip-dev libpq-dev nodejs npm supervisor \
     && docker-php-ext-install bcmath intl mbstring pdo_mysql pdo_pgsql zip \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
@@ -28,6 +28,8 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 RUN sed -i 's/^Listen 80$/Listen 10000/' /etc/apache2/ports.conf
 
+COPY docker/supervisord.conf /etc/supervisor/conf.d/ironhouse.conf
+
 EXPOSE 10000
 
 CMD sed -i "s/10000/${PORT:-10000}/g" /etc/apache2/ports.conf /etc/apache2/sites-available/000-default.conf \
@@ -35,4 +37,5 @@ CMD sed -i "s/10000/${PORT:-10000}/g" /etc/apache2/ports.conf /etc/apache2/sites
     && php artisan config:cache \
     && php artisan route:cache \
     && php artisan view:cache \
-    && apache2-foreground
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && exec /usr/bin/supervisord -c /etc/supervisor/conf.d/ironhouse.conf
